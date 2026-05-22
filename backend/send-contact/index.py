@@ -3,10 +3,11 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import psycopg2
 
 
 def handler(event: dict, context) -> dict:
-    """Отправляет письмо с формы контактов на почту владельца блога."""
+    """Сохраняет сообщение с формы контактов в БД и отправляет письмо владельцу блога."""
 
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
@@ -27,8 +28,22 @@ def handler(event: dict, context) -> dict:
     message = body.get("message", "").strip()
 
     if not name or not email or not message:
-        return {"statusCode": 400, "headers": cors_headers, "body": json.dumps({"error": "Заполните все обязательные поля"})}
+        return {"statusCode": 400, "headers": cors_headers, "body": json.dumps({"error": "Fill in all required fields"})}
 
+    schema = os.environ["MAIN_DB_SCHEMA"]
+
+    # Сохраняем в базу данных
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    cur = conn.cursor()
+    cur.execute(
+        f"INSERT INTO {schema}.contacts (name, email, subject, message) VALUES (%s, %s, %s, %s)",
+        (name, email, subject, message)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    # Отправляем письмо
     smtp_host = os.environ["SMTP_HOST"]
     smtp_port = int(os.environ["SMTP_PORT"])
     smtp_user = os.environ["SMTP_USER"]
