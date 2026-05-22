@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 
+const SEND_CONTACT_URL = "https://functions.poehali.dev/5f75f1b3-4202-4325-b1a4-4e763112bb5b";
+
 // ── Images ──────────────────────────────────────────────────────────────────
 const IMG_HERO       = "https://cdn.poehali.dev/projects/5463dddc-ad3a-44df-9982-2b7a51790828/files/5099f093-06d1-445a-9214-a326084ed887.jpg";
 const IMG_GEORGIA    = "https://cdn.poehali.dev/projects/5463dddc-ad3a-44df-9982-2b7a51790828/files/183909fb-079f-475b-9e76-b5ccab8f8f4f.jpg";
@@ -109,6 +111,8 @@ export default function Index() {
   const [openArticle, setOpenArticle] = useState<typeof allArticles[0] | null>(null);
   const [contactForm, setContactForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [formSent, setFormSent] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState("");
   const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -139,11 +143,29 @@ export default function Index() {
   const filteredArticles = activeFilter === "Все" ? allArticles : allArticles.filter(a => a.tag === activeFilter);
   const navBg = scrollY > 60 || activeSection !== "home";
 
-  function handleSendForm(e: React.FormEvent) {
+  async function handleSendForm(e: React.FormEvent) {
     e.preventDefault();
-    setFormSent(true);
-    setTimeout(() => setFormSent(false), 4000);
-    setContactForm({ name: "", email: "", subject: "", message: "" });
+    setFormLoading(true);
+    setFormError("");
+    try {
+      const res = await fetch(SEND_CONTACT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contactForm),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFormSent(true);
+        setContactForm({ name: "", email: "", subject: "", message: "" });
+        setTimeout(() => setFormSent(false), 5000);
+      } else {
+        setFormError(data.error || "Ошибка отправки. Попробуйте позже.");
+      }
+    } catch {
+      setFormError("Нет соединения с сервером. Попробуйте позже.");
+    } finally {
+      setFormLoading(false);
+    }
   }
 
   return (
@@ -711,6 +733,13 @@ export default function Index() {
                 Сообщение отправлено! Отвечу в течение 24 часов.
               </div>
             )}
+            {formError && (
+              <div className="mb-6 px-4 py-3 rounded-lg text-sm flex items-center gap-2"
+                style={{ background: "hsl(0 80% 95%)", color: "hsl(0 70% 40%)", border: "1px solid hsl(0 70% 85%)" }}>
+                <Icon name="AlertCircle" size={16} />
+                {formError}
+              </div>
+            )}
 
             <div className="flex flex-col gap-4">
               <div className="grid md:grid-cols-2 gap-4">
@@ -739,10 +768,18 @@ export default function Index() {
                   onChange={e => setContactForm(p => ({ ...p, message: e.target.value }))}
                   className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm focus:outline-none resize-none" />
               </div>
-              <button type="submit"
-                className="w-full py-3.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
+              <button type="submit" disabled={formLoading}
+                className="w-full py-3.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{ background: "hsl(var(--terra))", color: "hsl(var(--primary-foreground))" }}>
-                Отправить сообщение
+                {formLoading ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Отправляем...
+                  </>
+                ) : "Отправить сообщение"}
               </button>
             </div>
           </form>
